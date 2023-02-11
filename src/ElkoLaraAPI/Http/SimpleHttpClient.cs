@@ -7,20 +7,13 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace ElkoLaraAPI
+namespace ElkoLaraAPI.Http
 {
     /// <summary>
     /// Simple HTTP client that does not keep the connection opened and sends the entire request (header + content) in a single TCP packet.
     /// </summary>
     internal static class SimpleHttpClient
 	{
-        internal struct SimpleHttpResponse
-        {
-            public byte[] Content { get; set; }
-            public Dictionary<string, string> Headers { get; set; }
-            public int StatusCode { get; set; }
-        }
-
         /// <summary>
         /// Sends the HTTP request and returns the response.
         /// </summary>
@@ -102,7 +95,7 @@ namespace ElkoLaraAPI
                         string[] responseHeaders = Encoding.ASCII.GetString(data, 0, index).Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
                         
                         result.StatusCode = int.Parse(responseHeaders.First().Split(' ').Skip(1).First());
-                        result.Headers = responseHeaders.Skip(1).ToDictionary(x => x.Substring(0, x.IndexOf(':')), x => (x.Substring(x.IndexOf(':') + 1)).TrimStart().TrimEnd());
+                        result.Headers = responseHeaders.Skip(1).ToDictionary(x => x.Substring(0, x.IndexOf(':')), x => x.Substring(x.IndexOf(':') + 1).TrimStart().TrimEnd());
                         result.Content = data.Skip(index).ToArray();
 
                         if (result.Headers != null && result.Headers.ContainsKey("Content-Length") && int.Parse(result.Headers["Content-Length"]) > result.Content.Length)

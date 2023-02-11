@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace ElkoLaraAPI
+namespace ElkoLaraAPI.Http
 {
     /// <summary>
     /// Digest authentication helper.

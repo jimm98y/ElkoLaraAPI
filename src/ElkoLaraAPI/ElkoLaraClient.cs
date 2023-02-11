@@ -1,12 +1,8 @@
 ﻿using ElkoLaraAPI.API;
+using ElkoLaraAPI.Http;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.IO.Compression;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Sockets;
-using System.Runtime;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -14,6 +10,7 @@ namespace ElkoLaraAPI
 {
     /// <summary>
     /// Client for the Elko Lara smart radio https://www.elkoep.cz/lara.
+    /// Ported from JavaScript web interface into C#.
     /// </summary>
     public class ElkoLaraClient
     {
@@ -695,12 +692,6 @@ namespace ElkoLaraAPI
                 if (9 == e)
                 {
                     // Toggle
-                    //if (audio_mute == 0)
-                    //    audio_mute = 1;
-                    //else
-                    //    audio_mute = 0;
-
-                    // the API cannot know the previous state
                     result.IsMuteToggle = true;
                 }
                 else
@@ -722,7 +713,7 @@ namespace ElkoLaraAPI
             }
         }
 
-        private async Task<SimpleHttpClient.SimpleHttpResponse> MakeRequestAsync(string method, string uri, byte[] msg = null)
+        private async Task<SimpleHttpResponse> MakeRequestAsync(string method, string uri, byte[] msg = null)
         {
             if (!(method == "POST" || method == "GET"))
                 throw new NotSupportedException($"Method not supported: {method}");
@@ -738,8 +729,10 @@ namespace ElkoLaraAPI
             // use previous WWW auth header if available
             if (!string.IsNullOrEmpty(this._wwwAuth))
             {
-                headers = new Dictionary<string, string>();
-                headers.Add("Authorization", DigestHelper.GetDigest(this._wwwAuth, uri, method, this._userName, this._password));
+                headers = new Dictionary<string, string>
+                {
+                    { "Authorization", DigestHelper.GetDigest(this._wwwAuth, uri, method, this._userName, this._password) }
+                };
             }
 
             var httpResponse = await SimpleHttpClient.MakeRequestAsync(method, uri, headers, msg);
@@ -748,10 +741,12 @@ namespace ElkoLaraAPI
             {
                 this._wwwAuth = httpResponse.Headers["WWW-Authenticate"];
 
-                headers = new Dictionary<string, string>();
-                headers.Add("Authorization", DigestHelper.GetDigest(this._wwwAuth, uri, method, this._userName, this._password));
+                headers = new Dictionary<string, string>
+                {
+                    { "Authorization", DigestHelper.GetDigest(this._wwwAuth, uri, method, this._userName, this._password) }
+                };
 
-                // retry with the authenticate header
+                // retry with the authorization header
                 httpResponse = await SimpleHttpClient.MakeRequestAsync(method, uri, headers, msg);
             }
 
