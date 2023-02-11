@@ -174,6 +174,13 @@ namespace ElkoLaraAPI
         private byte audio_mute = 0;
         private bool is_playing = false;
         private string[] station_name = new string[MAX_STATIONS];
+        private string[] station_domain_name = new string[MAX_STATIONS];
+        private string[] station_file_name = new string[MAX_STATIONS];
+        private byte[] station_ip_0 = new byte[MAX_STATIONS];
+        private byte[] station_ip_1 = new byte[MAX_STATIONS];
+        private byte[] station_ip_2 = new byte[MAX_STATIONS];
+        private byte[] station_ip_3 = new byte[MAX_STATIONS];
+        private int[] station_port = new int[MAX_STATIONS];
 
         private async Task<LaraOpenResult> OpenRemoteAsync(byte e, byte t)
         {
@@ -274,9 +281,84 @@ namespace ElkoLaraAPI
             }
         }
 
-        public Task GetStationPageAsync()
+
+        public async Task GetStationPageAsync(int page = 0)
         {
-            throw new NotImplementedException();
+            byte[] request = new byte[]
+            {
+                255,
+                250,
+                250,
+                255,
+                (byte)Math.Floor(125 * _rand.NextDouble() + 1),
+                (byte)Math.Floor(125 * _rand.NextDouble() + 125 + 1),
+                0,
+                128,
+                192,
+                0 // will be replaced
+            };
+
+            switch(page)
+            {
+                case 0:
+                    request[9] = 6;
+                    break;
+
+                case 1:
+                    request[9] = 12;
+                    break;
+
+                case 2:
+                    request[9] = 13;
+                    break;
+
+                case 3:
+                    request[9] = 14;
+                    break;
+
+                default:
+                    throw new NotSupportedException($"Page not supported: {page}");
+            }
+
+            byte[] response = await MakeRequestAsync("POST", $"{this._host}/data", request);
+
+            stations_count = response[12];
+
+            for (int i = 0; i < 10; i++)
+            {
+                for (int n = 0; n < MAX_NAME_STRING + 1; n++)
+                {
+                    station_name[i + 10 * page] = "";
+                    char k;
+                    if ('\0' == (k = _encoding.GetString(new byte[] { response[13 + n + 139 * i] }).ToCharArray()[0]))
+                        break;
+                    station_name[i + 10 * page] += k;
+                }
+
+                for (int n = 0; n < MAX_NAME_STRING + 1; n++)
+                {
+                    station_domain_name[i + 10 * page] = "";
+                    char k;
+                    if ('\0' == (k = _encoding.GetString(new byte[] { response[26 + n + 139 * i] }).ToCharArray()[0]))
+                        break;
+                    station_domain_name[i + 10 * page] += k;
+                }
+
+                for (int n = 0; n < MAX_NAME_STRING + 1; n++)
+                {
+                    station_file_name[i + 10 * page] = "";
+                    char k;
+                    if ('\0' == (k = _encoding.GetString(new byte[] { response[76 + n + 139 * i] }).ToCharArray()[0]))
+                        break;
+                    station_file_name[i + 10 * page] += k;
+                }
+
+                station_ip_0[i + 10 * page] = response[146 + 139 * i];
+                station_ip_1[i + 10 * page] = response[147 + 139 * i];
+                station_ip_2[i + 10 * page] = response[148 + 139 * i];
+                station_ip_3[i + 10 * page] = response[149 + 139 * i];
+                station_port[i + 10 * page] = response[150 + 139 * i] << 8 | 255 & response[151 + 139 * i];
+            }
         }
 
         public Task SetStationPageAsync()
@@ -284,9 +366,51 @@ namespace ElkoLaraAPI
             throw new NotImplementedException();
         }
 
-        public Task GetEq5Async()
+        // TODO encapsulate
+        const int eqMAX = 5;
+        int eqEditMode = 0;
+        int _eqSelected = 0;
+        int[] eqLvl1 = new int[eqMAX];
+        int[] eqLvl2 = new int[eqMAX];
+        int[] eqLvl3 = new int[eqMAX];
+        int[] eqLvl4 = new int[eqMAX];
+        int[] eqLvl5 = new int[eqMAX];
+        int[] eqFreq1 = new int[eqMAX];
+        int[] eqFreq2 = new int[eqMAX];
+        int[] eqFreq3 = new int[eqMAX];
+        int[] eqFreq4 = new int[eqMAX];
+
+        public async Task GetEq5Async()
         {
-            throw new NotImplementedException();
+            byte[] request = new byte[]
+            {
+                255,
+                250,
+                250,
+                255,
+                (byte)Math.Floor(125 * _rand.NextDouble() + 1),
+                (byte)Math.Floor(125 * _rand.NextDouble() + 125 + 1),
+                0,
+                128,
+                192,
+                48
+            };
+
+            byte[] response = await MakeRequestAsync("POST", $"{this._host}/data", request);
+
+            var t = 0;
+            for (t = 0; t < eqMAX; t++)
+            {
+                eqLvl1[t] = (response[11 + 18 * t] << 8 | response[12 + 18 * t]) << 16 >> 16;
+                eqLvl2[t] = (response[13 + 18 * t] << 8 | response[14 + 18 * t]) << 16 >> 16;
+                eqLvl3[t] = (response[15 + 18 * t] << 8 | response[16 + 18 * t]) << 16 >> 16;
+                eqLvl4[t] = (response[17 + 18 * t] << 8 | response[18 + 18 * t]) << 16 >> 16;
+                eqLvl5[t] = (response[19 + 18 * t] << 8 | response[20 + 18 * t]) << 16 >> 16;
+                eqFreq1[t] = response[21 + 18 * t] << 8 | response[22 + 18 * t];
+                eqFreq2[t] = response[23 + 18 * t] << 8 | response[24 + 18 * t];
+                eqFreq3[t] = response[25 + 18 * t] << 8 | response[26 + 18 * t];
+                eqFreq4[t] = response[27 + 18 * t] << 8 | response[28 + 18 * t];
+            }
         }
 
         public Task SetEq5Async()
