@@ -1,13 +1,17 @@
 ﻿using ElkoLaraAPI.API;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace ElkoLaraAPI
 {
-    public class ElkoLaraClient : IDisposable
+    public class ElkoLaraClient
     {
         private const int MAX_SETTINGS_STRING = 16;
         private static readonly Encoding _encoding = null;
@@ -16,9 +20,7 @@ namespace ElkoLaraAPI
         private readonly string _userName;
         private readonly string _password;
 
-        private readonly HttpClient _httpClient;
         private readonly Random _rand = new Random();
-        private bool disposedValue;
         private string _wwwAuth;
 
         static ElkoLaraClient()
@@ -29,16 +31,20 @@ namespace ElkoLaraAPI
 
         public ElkoLaraClient(string ipAddress, string userName, string password)
         {
-            this._host = $"http://{ipAddress ?? throw new ArgumentNullException(nameof(ipAddress))}";
+            this._host = ipAddress ?? throw new ArgumentNullException(nameof(ipAddress));
             this._userName = userName ?? throw new ArgumentNullException(nameof(userName));
             this._password = password ?? throw new ArgumentNullException(nameof(password));
-            this._httpClient = new HttpClient();
+        }
+
+        private string GetUri(string path = "")
+        {
+            return $"http://{this._host}{path}";
         }
 
         public async Task<string> GetIndexPageAsync()
         {
-            byte[] response = await MakeRequestAsync("GET", this._host);
-            return Encoding.UTF8.GetString(response);
+            var response = await MakeRequestAsync("GET", GetUri());
+            return Encoding.UTF8.GetString(response.Content);
         }
 
         public async Task<LaraBasicInfo> GetBasicInfoAsync()
@@ -56,7 +62,8 @@ namespace ElkoLaraAPI
                 2
             };
 
-            byte[] response = await MakeRequestAsync("POST", $"{this._host}/data", request);
+            var httpResponse = await MakeRequestAsync("POST", GetUri("/data"), request);
+            byte[] response = httpResponse.Content;
 
             int t = response[11] << 16 | response[12] << 8 | response[13];
             string infoFw = ((int)Math.Floor(t / 1e4) + "." + Math.Floor((t - 10000 * Math.Floor(t / 10000d)) / 1000)) + "." + (t % 1000 < 100 ? "0" + t % 1000 : "" + t % 1000);
@@ -91,6 +98,11 @@ namespace ElkoLaraAPI
             return OpenRemoteAsync(5, (byte)volume);
         }
 
+        /// <summary>
+        /// Returns the settings including user names and passwords.
+        /// Vulnerability: This method does not require any authentication, so anybody can call it and just get the user name and password :)
+        /// </summary>
+        /// <returns></returns>
         public async Task<LaraSettings> GetSettingsAsync()
         {
             byte[] request = new byte[]
@@ -107,7 +119,8 @@ namespace ElkoLaraAPI
                 2
             };
 
-            byte[] response = await MakeRequestAsync("POST", $"{this._host}/data", request);
+            var httpResponse = await MakeRequestAsync("POST", GetUri("/data"), request);
+            byte[] response = httpResponse.Content;
 
             byte[] controlBits = new byte[2] { response[11], response[12] };
             string ipAddress = $"{response[81]}.{response[82]}.{response[83]}.{response[84]}";
@@ -194,7 +207,8 @@ namespace ElkoLaraAPI
                 t
             };
 
-            byte[] response = await MakeRequestAsync("POST", $"{this._host}/data", request);
+            var httpResponse = await MakeRequestAsync("POST", GetUri("/data"), request);
+            byte[] response = httpResponse.Content;
 
             if (0 == response[0])
             {
@@ -320,7 +334,8 @@ namespace ElkoLaraAPI
                     throw new NotSupportedException($"Page not supported: {page}");
             }
 
-            byte[] response = await MakeRequestAsync("POST", $"{this._host}/data", request);
+            var httpResponse = await MakeRequestAsync("POST", GetUri("/data"), request);
+            byte[] response = httpResponse.Content;
 
             stations_count = response[12];
 
@@ -396,7 +411,8 @@ namespace ElkoLaraAPI
                 48
             };
 
-            byte[] response = await MakeRequestAsync("POST", $"{this._host}/data", request);
+            var httpResponse = await MakeRequestAsync("POST", GetUri("/data"), request);
+            byte[] response = httpResponse.Content;
 
             var t = 0;
             for (t = 0; t < eqMAX; t++)
@@ -418,90 +434,58 @@ namespace ElkoLaraAPI
             throw new NotImplementedException();
         }
 
-        private async Task<byte[]> MakeRequestAsync(string method, string uri, byte[] msg = null)
+        
+
+        /// <summary>
+        /// Sends the request to Elko Lara and returns the response.
+        /// </summary>
+        /// <param name="method"></param>
+        /// <param name="uri"></param>
+        /// <param name="msg"></param>
+        /// <returns></returns>
+        /// <exception cref="NotSupportedException"></exception>
+        /// <exception cref="ArgumentException"></exception>
+        private async Task<CustomHttpResponse> MakeRequestAsync(string method, string uri, byte[] msg = null)
         {
-            using (HttpRequestMessage request = new HttpRequestMessage())
+            if (!(method == "POST" || method == "GET"))
+                throw new NotSupportedException($"Method not supported: {method}");
+
+            if (!Uri.IsWellFormedUriString(uri, UriKind.Absolute))
+                throw new ArgumentException("Invalid URI.");
+
+            // Here we cannot use the standard .NET HttpClient, because it splits the POST request into 2 TCP packets: the headers are sent in the first one, while the content is sent in another one.
+            // It looks like Elko Lara cannot reassemlbe the request correctly and therefore once we attempt to write anything we get 404 Not found from the /Data endpoint. There seems to be no way of
+            //  changing this behavior in .NET HttpClient. This issue is reproducible on MacOSX 13.2 with netstandard 2.0 DLL under NET7 MAUI host. The solution is to use TcpClient instead.
+            Dictionary<string, string> headers = null;
+
+            // use previous WWW auth header if available
+            if (!string.IsNullOrEmpty(this._wwwAuth))
             {
-                request.Method = new HttpMethod(method);
-                request.RequestUri = new Uri(uri);
-
-                if (msg != null)
-                {
-                    request.Content = new ByteArrayContent(msg);
-                }
-
-                // use previous WWW auth header if available
-                if (!string.IsNullOrEmpty(_wwwAuth))
-                {
-                    request.Headers.Add("Authorization", DigestHelper.GetDigest(_wwwAuth, uri, method, this._userName, this._password));
-                }
-
-                using (HttpResponseMessage response = await _httpClient.SendAsync(request))
-                {
-                    // if we get unauthorized, the WWW-Authenticate header will contain new nonce
-                    if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                    {
-                        string wwwAuth = response.Headers.GetValues("WWW-Authenticate").Single();
-                        if (wwwAuth.StartsWith("Digest ", StringComparison.OrdinalIgnoreCase))
-                        {
-                            // save the nonce for the next request
-                            this._wwwAuth = wwwAuth;
-
-                            // repeat the request once more with the new Authorization header
-                            using (HttpRequestMessage repeatedRequest = new HttpRequestMessage())
-                            {
-                                repeatedRequest.Method = new HttpMethod(method);
-                                repeatedRequest.RequestUri = new Uri(uri);
-                                repeatedRequest.Headers.Add("Authorization", DigestHelper.GetDigest(wwwAuth, uri, method, this._userName, this._password));
-
-                                using (HttpResponseMessage repeatedResponse = await _httpClient.SendAsync(repeatedRequest))
-                                {
-                                    repeatedResponse.EnsureSuccessStatusCode();
-                                    return await repeatedResponse.Content.ReadAsByteArrayAsync();
-                                }
-                            }
-                        }
-                        else
-                        {
-                            throw new NotSupportedException(wwwAuth);
-                        }
-                    }
-
-                    response.EnsureSuccessStatusCode();
-                    return await response.Content.ReadAsByteArrayAsync();
-                }
+                headers = new Dictionary<string, string>();
+                headers.Add("Authorization", DigestHelper.GetDigest(this._wwwAuth, uri, method, this._userName, this._password));
             }
+
+            var httpResponse = await CustomHttpClient.MakeRequestAsync(method, uri, headers, msg);
+            
+            if(httpResponse.Headers != null && httpResponse.Headers.ContainsKey("WWW-Authenticate"))
+            {
+                string wwwAuth = httpResponse.Headers["WWW-Authenticate"];
+
+                headers = new Dictionary<string, string>();
+                headers["Authorization"] = DigestHelper.GetDigest(wwwAuth, uri, method, this._userName, this._password);
+
+                // retry with the authenticate header
+                httpResponse = await CustomHttpClient.MakeRequestAsync(method, uri, headers, msg);
+
+                this._wwwAuth = wwwAuth;
+            }
+
+            return httpResponse;
         }
 
         private static string ParseString(byte[] data, int index)
         {
             return _encoding.GetString(data.Skip(index).Take(MAX_SETTINGS_STRING).ToArray()).TrimEnd('\0');
         }
-
-        #region IDisposable
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposedValue)
-            {
-                if (disposing)
-                {
-                    if (this._httpClient != null)
-                    {
-                        this._httpClient.Dispose();
-                    }
-                }
-
-                disposedValue = true;
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
-
-        #endregion // IDisposable
     }
 }
