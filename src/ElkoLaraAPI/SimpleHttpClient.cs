@@ -9,25 +9,25 @@ using System.Threading.Tasks;
 
 namespace ElkoLaraAPI
 {
-    public struct CustomHttpResponse
+    public struct SimpleHttpResponse
     {
         public byte[] Content { get; set; }
         public Dictionary<string, string> Headers { get; set; }
         public int StatusCode { get; set; }
     }
 
-    public static class CustomHttpClient
+    public static class SimpleHttpClient
 	{
         /// <summary>
-        /// Sends the request to Elko Lara and returns the response.
+        /// Sends the HTTP request and returns the response.
         /// </summary>
         /// <param name="method">HTTP method: GET or POST.</param>
         /// <param name="uri">Uri such as http://host.</param>
         /// <param name="msg">HTTP message body in bytes.</param>
-        /// <returns><see cref="CustomHttpResponse"/>.</returns>
+        /// <returns><see cref="SimpleHttpResponse"/>.</returns>
         /// <exception cref="NotSupportedException"></exception>
         /// <exception cref="ArgumentException"></exception>
-        public static async Task<CustomHttpResponse> MakeRequestAsync(string method, string uri, Dictionary<string, string> headers = null, byte[] msg = null)
+        public static async Task<SimpleHttpResponse> MakeRequestAsync(string method, string uri, Dictionary<string, string> headers = null, byte[] msg = null)
         {
             if (!(method == "POST" || method == "GET"))
                 throw new NotSupportedException($"Method not supported: {method}");
@@ -35,7 +35,7 @@ namespace ElkoLaraAPI
             if (!Uri.IsWellFormedUriString(uri, UriKind.Absolute))
                 throw new ArgumentException("Invalid URI.");
 
-            CustomHttpResponse result = new CustomHttpResponse();
+            SimpleHttpResponse result = new SimpleHttpResponse();
 
             var dstUri = new Uri(uri);
 
@@ -45,7 +45,6 @@ namespace ElkoLaraAPI
 
                 using (var networkStream = tcp.GetStream())
                 {
-                    // Send request headers
                     var builder = new StringBuilder();
                     builder.Append($"{method} {dstUri.PathAndQuery} HTTP/1.1\r\n");
 

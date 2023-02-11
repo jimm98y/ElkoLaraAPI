@@ -3,6 +3,7 @@
     public class LaraSettings
     {
         public byte[] ControlBits { get; set; }
+        public byte IrLockBits { get; set; }
         public string IpAddress { get; set; }
         public string IpMask { get; set; }
         public string IpGateway { get; set; }
@@ -23,6 +24,6 @@
         public string UserLogin { get; set; }
         public string UserPassword { get; set; }
         public string AudioZoneUserName { get; set; }
-        public string AudioZonePassword { get; set; }
+        public string AudioZonePassword { get; set; }   
     }
 }

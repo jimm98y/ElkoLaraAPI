@@ -6,5 +6,6 @@
         public string Song { get; set; }
         public bool IsPlaying { get; set; }
         public bool IsMute { get; set; }
+        public bool IsMuteToggle { get; set; }
     }
 }
