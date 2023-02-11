@@ -9,15 +9,18 @@ using System.Threading.Tasks;
 
 namespace ElkoLaraAPI
 {
-    public struct SimpleHttpResponse
-    {
-        public byte[] Content { get; set; }
-        public Dictionary<string, string> Headers { get; set; }
-        public int StatusCode { get; set; }
-    }
-
-    public static class SimpleHttpClient
+    /// <summary>
+    /// Simple HTTP client that does not keep the connection opened and sends the entire request (header + content) in a single TCP packet.
+    /// </summary>
+    internal static class SimpleHttpClient
 	{
+        internal struct SimpleHttpResponse
+        {
+            public byte[] Content { get; set; }
+            public Dictionary<string, string> Headers { get; set; }
+            public int StatusCode { get; set; }
+        }
+
         /// <summary>
         /// Sends the HTTP request and returns the response.
         /// </summary>
@@ -36,20 +39,19 @@ namespace ElkoLaraAPI
                 throw new ArgumentException("Invalid URI.");
 
             SimpleHttpResponse result = new SimpleHttpResponse();
-
-            var dstUri = new Uri(uri);
+            Uri destination = new Uri(uri);
 
             using (var tcp = new TcpClient(AddressFamily.InterNetwork))
             {
-                await tcp.ConnectAsync(dstUri.Host, dstUri.Port);
+                await tcp.ConnectAsync(destination.Host, destination.Port);
 
                 using (var networkStream = tcp.GetStream())
                 {
                     var builder = new StringBuilder();
-                    builder.Append($"{method} {dstUri.PathAndQuery} HTTP/1.1\r\n");
+                    builder.Append($"{method} {destination.PathAndQuery} HTTP/1.1\r\n");
 
                     if (headers == null || !headers.ContainsKey("Host"))
-                        builder.Append($"Host: {dstUri.Host}\r\n");
+                        builder.Append($"Host: {destination.Host}\r\n");
 
                     if (method == "POST")
                     {
@@ -91,25 +93,14 @@ namespace ElkoLaraAPI
                     await networkStream.FlushAsync();
 
                     // receive data
-                    var buffer = new byte[1024];
-
                     using (var ms = new MemoryStream())
                     {
-                        while (true)
-                        {
-                            int byteCount = await networkStream.ReadAsync(buffer, 0, buffer.Length);
-                            ms.Write(buffer, 0, byteCount);
-
-                            if (byteCount < buffer.Length)
-                            {
-                                break;
-                            }
-                        }
+                        await LoadResponseAsync(networkStream, ms);
 
                         var data = ms.ToArray();
-
                         var index = BinaryMatch(data, Encoding.ASCII.GetBytes("\r\n\r\n")) + 4;
                         string[] responseHeaders = Encoding.ASCII.GetString(data, 0, index).Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+                        
                         result.StatusCode = int.Parse(responseHeaders.First().Split(' ').Skip(1).First());
                         result.Headers = responseHeaders.Skip(1).ToDictionary(x => x.Substring(0, x.IndexOf(':')), x => (x.Substring(x.IndexOf(':') + 1)).TrimStart().TrimEnd());
                         result.Content = data.Skip(index).ToArray();
@@ -118,27 +109,19 @@ namespace ElkoLaraAPI
                         {
                             using (var contentMS = new MemoryStream())
                             {
-                                while (true)
-                                {
-                                    int byteCount = await networkStream.ReadAsync(buffer, 0, buffer.Length);
-                                    contentMS.Write(buffer, 0, byteCount);
-
-                                    if (byteCount < buffer.Length)
-                                    {
-                                        break;
-                                    }
-                                }
-
+                                await LoadResponseAsync(networkStream, contentMS);
                                 contentMS.Position = 0;
 
                                 if (result.Headers.ContainsKey("Content-Encoding") && result.Headers["Content-Encoding"] == "gzip")
                                 {
-                                    using (GZipStream decompressionStream = new GZipStream(contentMS, CompressionMode.Decompress))
-                                    using (var decompressedMemory = new MemoryStream())
+                                    using (var decompressionStream = new GZipStream(contentMS, CompressionMode.Decompress))
                                     {
-                                        decompressionStream.CopyTo(decompressedMemory);
-                                        decompressedMemory.Position = 0;
-                                        result.Content = decompressedMemory.ToArray();
+                                        using (var decompressedMemory = new MemoryStream())
+                                        {
+                                            decompressionStream.CopyTo(decompressedMemory);
+                                            decompressedMemory.Position = 0;
+                                            result.Content = decompressedMemory.ToArray();
+                                        }
                                     }
                                 }
                                 else
@@ -147,12 +130,26 @@ namespace ElkoLaraAPI
                                 }
                             }
                         }
-                        
                     }
                 }
             }
 
             return result;
+        }
+
+        private static async Task LoadResponseAsync(NetworkStream networkStream, MemoryStream ms)
+        {
+            var buffer = new byte[1024];
+            while (true)
+            {
+                int byteCount = await networkStream.ReadAsync(buffer, 0, buffer.Length);
+                ms.Write(buffer, 0, byteCount);
+
+                if (byteCount < buffer.Length)
+                {
+                    break;
+                }
+            }
         }
 
         private static int BinaryMatch(byte[] input, byte[] pattern)

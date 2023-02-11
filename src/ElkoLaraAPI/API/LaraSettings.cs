@@ -1,5 +1,8 @@
 ﻿namespace ElkoLaraAPI.API
 {
+    /// <summary>
+    /// Radio configuration.
+    /// </summary>
     public class LaraSettings
     {
         public byte[] ControlBits { get; set; }

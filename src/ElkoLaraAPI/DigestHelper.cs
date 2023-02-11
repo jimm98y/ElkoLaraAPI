@@ -13,7 +13,7 @@ namespace ElkoLaraAPI
     /// https://en.wikipedia.org/wiki/Digest_access_authentication
     /// https://stackoverflow.com/questions/594323/implement-digest-authentication-via-httpwebrequest-in-c-sharp
     /// </remarks>
-    public class DigestHelper
+    internal class DigestHelper
     {
         public static string GetDigest(string wwwAuth, string requestUri, string httpMethod, string userName, string password)
         {

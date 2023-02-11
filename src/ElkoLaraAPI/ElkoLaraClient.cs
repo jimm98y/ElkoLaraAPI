@@ -401,42 +401,42 @@ namespace ElkoLaraAPI
 
             var result = new LaraStations();
 
-            result.StationsCount = response[12];
+            result.Count = response[12];
 
             for (int i = 0; i < 10; i++)
             {
                 for (int n = 0; n < MAX_NAME_STRING + 1; n++)
                 {
-                    result.StationName[i + 10 * page] = "";
+                    result.Name[i + 10 * page] = "";
                     char k;
                     if (0 == (k = _encoding.GetString(new byte[] { response[13 + n + 139 * i] }).ToCharArray()[0]))
                         break;
-                    result.StationName[i + 10 * page] += k;
+                    result.Name[i + 10 * page] += k;
                 }
 
                 for (int n = 0; n < MAX_NAME_STRING + 1; n++)
                 {
-                    result.StationDomainName[i + 10 * page] = "";
+                    result.DomainName[i + 10 * page] = "";
                     char k;
                     if (0 == (k = _encoding.GetString(new byte[] { response[26 + n + 139 * i] }).ToCharArray()[0]))
                         break;
-                    result.StationDomainName[i + 10 * page] += k;
+                    result.DomainName[i + 10 * page] += k;
                 }
 
                 for (int n = 0; n < MAX_NAME_STRING + 1; n++)
                 {
-                    result.StationFileName[i + 10 * page] = "";
+                    result.FileName[i + 10 * page] = "";
                     char k;
                     if (0 == (k = _encoding.GetString(new byte[] { response[76 + n + 139 * i] }).ToCharArray()[0]))
                         break;
-                    result.StationFileName[i + 10 * page] += k;
+                    result.FileName[i + 10 * page] += k;
                 }
 
-                result.StationIp0[i + 10 * page] = response[146 + 139 * i];
-                result.StationIp1[i + 10 * page] = response[147 + 139 * i];
-                result.StationIp2[i + 10 * page] = response[148 + 139 * i];
-                result.StationIp3[i + 10 * page] = response[149 + 139 * i];
-                result.StationPort[i + 10 * page] = response[150 + 139 * i] << 8 | 255 & response[151 + 139 * i];
+                result.Ip0[i + 10 * page] = response[146 + 139 * i];
+                result.Ip1[i + 10 * page] = response[147 + 139 * i];
+                result.Ip2[i + 10 * page] = response[148 + 139 * i];
+                result.Ip3[i + 10 * page] = response[149 + 139 * i];
+                result.Port[i + 10 * page] = response[150 + 139 * i] << 8 | 255 & response[151 + 139 * i];
             }
 
             return result;
@@ -466,7 +466,7 @@ namespace ElkoLaraAPI
             request[8] = 192;
             request[9] = 8;
             request[45] = (byte)page;
-            request[46] = stations.StationsCount;
+            request[46] = stations.Count;
 
             var n = 0;
             var i = 0;
@@ -476,28 +476,28 @@ namespace ElkoLaraAPI
 
                 for (i = 0; i < MAX_NAME_STRING + 1; i++)
                     request[47 + i + 139 * n] = 0;
-                byteString = _encoding.GetBytes(stations.StationName[n + 10 * page]);
+                byteString = _encoding.GetBytes(stations.Name[n + 10 * page]);
                 for (i = 0; i < CheckStringLength(byteString, MAX_NAME_STRING); i++)
                     request[47 + i + 139 * n] = byteString[i];
 
                 for (i = 0; i < MAX_DOMAIN_NAME_STRING + 1; i++)
                     request[60 + i + 139 * n] = 0;
-                byteString = _encoding.GetBytes(stations.StationDomainName[n + 10 * page]);
+                byteString = _encoding.GetBytes(stations.DomainName[n + 10 * page]);
                 for (i = 0; i < CheckStringLength(byteString, MAX_DOMAIN_NAME_STRING); i++)
                     request[60 + i + 139 * n] = byteString[i];
 
                 for (i = 0; i < MAX_FILE_NAME_STRING + 1; i++)
                     request[110 + i + 139 * n] = 0;
-                byteString = _encoding.GetBytes(stations.StationFileName[n + 10 * page]);
+                byteString = _encoding.GetBytes(stations.FileName[n + 10 * page]);
                 for (i = 0; i < CheckStringLength(byteString, MAX_FILE_NAME_STRING); i++)
                     request[120 + i + 139 * n] = byteString[i];
 
-                request[180 + 139 * n] = stations.StationIp0[n + 10 * page];
-                request[181 + 139 * n] = stations.StationIp1[n + 10 * page];
-                request[182 + 139 * n] = stations.StationIp2[n + 10 * page];
-                request[183 + 139 * n] = stations.StationIp3[n + 10 * page];
-                request[184 + 139 * n] = (byte)(stations.StationPort[n + 10 * page] >> 8);
-                request[185 + 139 * n] = (byte)(255 & stations.StationPort[n + 10 * page]);
+                request[180 + 139 * n] = stations.Ip0[n + 10 * page];
+                request[181 + 139 * n] = stations.Ip1[n + 10 * page];
+                request[182 + 139 * n] = stations.Ip2[n + 10 * page];
+                request[183 + 139 * n] = stations.Ip3[n + 10 * page];
+                request[184 + 139 * n] = (byte)(stations.Port[n + 10 * page] >> 8);
+                request[185 + 139 * n] = (byte)(255 & stations.Port[n + 10 * page]);
             }
 
             var httpResponse = await MakeRequestAsync("POST", GetDataUri(), request);
@@ -656,29 +656,29 @@ namespace ElkoLaraAPI
                     if (11 == e)
                     {
                         if (0 == tt)
-                            tt = (byte)(stations.StationsCount - 1);
+                            tt = (byte)(stations.Count - 1);
                         else
                             tt -= 1;
 
-                        if (stations.StationsCount > response[2])
-                            infoSong = stations.StationName[tt];
+                        if (stations.Count > response[2])
+                            infoSong = stations.Name[tt];
                     }
                     else
                     {
                         if (10 == e)
                         {
-                            if (tt == stations.StationsCount - 1)
+                            if (tt == stations.Count - 1)
                                 tt = 0;
                             else
                                 tt += 1;
 
-                            if (stations.StationsCount > response[2])
-                                infoSong = stations.StationName[tt];
+                            if (stations.Count > response[2])
+                                infoSong = stations.Name[tt];
                         }
                         else
                         {
-                            if (stations.StationsCount > response[2])
-                                infoSong = stations.StationName[response[2]];
+                            if (stations.Count > response[2])
+                                infoSong = stations.Name[response[2]];
                         }
                     }
                 }
@@ -722,7 +722,7 @@ namespace ElkoLaraAPI
             }
         }
 
-        private async Task<SimpleHttpResponse> MakeRequestAsync(string method, string uri, byte[] msg = null)
+        private async Task<SimpleHttpClient.SimpleHttpResponse> MakeRequestAsync(string method, string uri, byte[] msg = null)
         {
             if (!(method == "POST" || method == "GET"))
                 throw new NotSupportedException($"Method not supported: {method}");

@@ -1,7 +1,8 @@
-﻿using System;
-
-namespace ElkoLaraAPI.API
+﻿namespace ElkoLaraAPI.API
 {
+    /// <summary>
+    /// Equalizer configuration.
+    /// </summary>
 	public class LaraEq
 	{
         public const int EQ_MAX = 5;
